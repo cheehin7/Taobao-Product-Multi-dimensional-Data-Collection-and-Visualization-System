@@ -1,0 +1,234 @@
+{% extends 'base.html' %}
+{% block page %}
+    <div class="page-title">
+        <div class="row">
+            <div class="col-12 col-md-6 order-md-1 order-last">
+                <h3>NLP情感分析</h3>
+                <p class="text-subtitle text-muted">淘宝商品评论情感倾向分析</p>
+            </div>
+            <div class="col-12 col-md-6 order-md-2 order-first">
+                <nav aria-label="breadcrumb" class="breadcrumb-header">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="/index">首页</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">NLP情感分析</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <section class="section">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title">评论情感分布</h4>
+                    </div>
+                    <div class="card-body">
+                        <div id="sentiment-chart" style="height: 450px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title">情感评分占比</h4>
+                    </div>
+                    <div class="card-body">
+                        <div id="sentiment-pie" style="height: 350px;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between">
+                        <h4 class="card-title">情感分析说明</h4>
+                        <div>
+                            <button class="btn btn-primary" id="analyze-btn">重新分析</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <p>情感分析基于SnowNLP自然语言处理技术，能够识别文本中表达的情感倾向，数值范围0-1：</p>
+                        <ul>
+                            <li>0-0.4：偏消极情感</li>
+                            <li>0.4-0.6：中性情感</li>
+                            <li>0.6-1.0：偏积极情感</li>
+                        </ul>
+                        <div id="status-message" class="alert alert-info mt-3" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 确保引入ECharts库 -->
+    <script src="../static/vendors/echarts/echarts.min.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 初始化图表
+            const sentimentChart = echarts.init(document.getElementById('sentiment-chart'));
+            const sentimentPie = echarts.init(document.getElementById('sentiment-pie'));
+            const analyzeBtn = document.getElementById('analyze-btn');
+            const statusMessage = document.getElementById('status-message');
+            
+            // 先显示加载中
+            sentimentChart.showLoading();
+            sentimentPie.showLoading();
+            
+            function loadCharts() {
+                // 从API获取数据
+                fetch('/api/sentiment_analysis')
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('网络响应不正常');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        // 隐藏加载
+                        sentimentChart.hideLoading();
+                        sentimentPie.hideLoading();
+                        
+                        // 配置情感分布图表
+                        const option = {
+                            title: {
+                                text: '评论情感分布'
+                            },
+                            tooltip: {
+                                trigger: 'axis',
+                                formatter: '{b}: {c}条评论'
+                            },
+                            xAxis: {
+                                type: 'category',
+                                data: data.sentiment_ranges,
+                                name: '情感倾向'
+                            },
+                            yAxis: {
+                                type: 'value',
+                                name: '评论数量'
+                            },
+                            series: [{
+                                data: data.sentiment_counts,
+                                type: 'bar',
+                                itemStyle: {
+                                    color: function(params) {
+                                        // 颜色从红色(负面)到绿色(正面)
+                                        const colors = ['#ee6666', '#fac858', '#91cc75'];
+                                        return colors[Math.floor(params.dataIndex / (data.sentiment_ranges.length / 3))];
+                                    }
+                                },
+                                label: {
+                                    show: true,
+                                    position: 'top',
+                                    formatter: '{c}条'
+                                }
+                            }]
+                        };
+                        
+                        // 设置图表
+                        sentimentChart.setOption(option);
+                        
+                        // 饼图配置
+                        const pieOption = {
+                            title: {
+                                text: '情感评分占比'
+                            },
+                            tooltip: {
+                                trigger: 'item',
+                                formatter: '{b}: {c}条 ({d}%)'
+                            },
+                            legend: {
+                                orient: 'vertical',
+                                left: 'left',
+                                data: ['偏消极', '中性', '偏积极']
+                            },
+                            series: [
+                                {
+                                    name: '情感分布',
+                                    type: 'pie',
+                                    radius: '55%',
+                                    center: ['50%', '60%'],
+                                    data: [
+                                        {value: data.negative_count, name: '偏消极', itemStyle: {color: '#ee6666'}},
+                                        {value: data.neutral_count, name: '中性', itemStyle: {color: '#fac858'}},
+                                        {value: data.positive_count, name: '偏积极', itemStyle: {color: '#91cc75'}}
+                                    ],
+                                    emphasis: {
+                                        itemStyle: {
+                                            shadowBlur: 10,
+                                            shadowOffsetX: 0,
+                                            shadowColor: 'rgba(0, 0, 0, 0.5)'
+                                        }
+                                    }
+                                }
+                            ]
+                        };
+                        
+                        sentimentPie.setOption(pieOption);
+                    })
+                    .catch(error => {
+                        console.error('获取数据失败:', error);
+                        sentimentChart.hideLoading();
+                        sentimentPie.hideLoading();
+                        
+                        // 显示错误信息
+                        statusMessage.style.display = 'block';
+                        statusMessage.className = 'alert alert-danger mt-3';
+                        statusMessage.textContent = '获取数据失败: ' + error.message;
+                    });
+            }
+            
+            // 页面加载完成后加载图表
+            loadCharts();
+            
+            // 窗口大小改变时，重新调整图表大小
+            window.addEventListener('resize', function() {
+                sentimentChart.resize();
+                sentimentPie.resize();
+            });
+            
+            // 绑定重新分析按钮事件
+            analyzeBtn.addEventListener('click', function() {
+                analyzeBtn.disabled = true;
+                statusMessage.style.display = 'block';
+                statusMessage.textContent = '正在进行情感分析，请稍候...';
+                statusMessage.className = 'alert alert-info mt-3';
+                
+                sentimentChart.showLoading();
+                sentimentPie.showLoading();
+                
+                // 发送请求重新分析
+                fetch('/analyze_sentiment', {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        statusMessage.className = 'alert alert-success mt-3';
+                        statusMessage.textContent = '情感分析完成！';
+                        // 重新加载图表
+                        loadCharts();
+                    } else {
+                        statusMessage.className = 'alert alert-danger mt-3';
+                        statusMessage.textContent = '情感分析失败：' + data.message;
+                        sentimentChart.hideLoading();
+                        sentimentPie.hideLoading();
+                    }
+                })
+                .catch(error => {
+                    statusMessage.className = 'alert alert-danger mt-3';
+                    statusMessage.textContent = '请求出错：' + error.message;
+                    sentimentChart.hideLoading();
+                    sentimentPie.hideLoading();
+                })
+                .finally(() => {
+                    analyzeBtn.disabled = false;
+                });
+            });
+        });
+    </script>
+{% endblock %} 

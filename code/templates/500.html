@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+
+{% block page %}
+<div class="page-heading">
+    <div class="page-title">
+        <div class="row">
+            <div class="col-12 text-center">
+                <div class="error-page">
+                    <h1 class="error-code" style="font-size: 8rem; color: #F76C6C;">500</h1>
+                    <h2 class="error-title my-4">服务器错误</h2>
+                    <p class="error-description mb-4">
+                        {% if error %}
+                            {{ error }}
+                        {% else %}
+                            抱歉，服务器遇到了一个问题。请稍后再试或联系管理员。
+                        {% endif %}
+                    </p>
+                    <div class="text-center mt-5">
+                        <a href="/index" class="btn btn-primary btn-lg">
+                            <i class="bi bi-house-door"></i> 返回首页
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .error-page {
+        padding: 80px 20px;
+    }
+    
+    .error-code {
+        font-weight: 600;
+        text-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+    }
+    
+    .error-title {
+        font-size: 2rem;
+        color: #333;
+    }
+    
+    .error-description {
+        font-size: 1.2rem;
+        color: #666;
+        max-width: 600px;
+        margin: 0 auto;
+    }
+</style>
+{% endblock %} 

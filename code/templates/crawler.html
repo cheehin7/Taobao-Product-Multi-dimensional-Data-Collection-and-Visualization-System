@@ -1,0 +1,392 @@
+{% extends "base.html" %}
+
+{% block page %}
+<div class="page-heading">
+    <div class="page-title">
+        <div class="row">
+            <div class="col-12 col-md-6 order-md-1 order-last">
+                <h3>淘宝商品爬虫</h3>
+                <p class="text-subtitle text-muted">请输入搜索关键词和页码范围开始爬取数据</p>
+            </div>
+        </div>
+    </div>
+    <section class="section">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">爬虫设置</h4>
+            </div>
+            <div class="card-body">
+                <form id="crawlerForm">
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="keyword">搜索关键词</label>
+                                <input type="text" class="form-control" id="keyword" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="pageStart">起始页码</label>
+                                <input type="number" class="form-control" id="pageStart" value="1" min="1" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="pageEnd">结束页码</label>
+                                <input type="number" class="form-control" id="pageEnd" value="1" min="1" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-primary" id="startBtn" onclick="startCrawler()">开始爬取</button>
+                                <button type="button" class="btn btn-danger" id="stopBtn" onclick="stopCrawler()" disabled>停止爬取</button>
+                                <button type="button" class="btn btn-success" id="confirmLoginBtn" onclick="confirmLogin()" disabled>确认登录</button>
+                                <button type="button" class="btn btn-warning" id="closeBrowserBtn" onclick="closeBrowser()" disabled>关闭浏览器</button>
+                                <button type="button" class="btn btn-danger" onclick="clearData()">清空数据</button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+                
+                <div class="alert alert-info mt-3">
+                    <h5>爬虫状态</h5>
+                    <p>运行状态: <span id="status">未启动</span></p>
+                    <p>当前页码: <span id="currentPage">0</span></p>
+                    <p>已爬取商品数: <span id="itemCount">0</span></p>
+                    <p>登录状态: <span id="loginStatus">未登录</span></p>
+                    <p>任务状态: <span id="crawlStatus">等待开始</span></p>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script>
+    // 全局变量
+    let isRunning = false;
+    let isWaitingLogin = false;
+    let currentPage = 0;
+    let itemCount = 0;
+    let statusTimer = null; // 状态定时查询计时器
+
+    // 初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('页面加载完成，开始查询爬虫状态');
+        // 页面加载完成后立即查询一次状态
+        updateStatus();
+        
+        // 设置定时查询，每2秒查询一次状态
+        startStatusPolling();
+    });
+
+    // 开始状态轮询
+    function startStatusPolling() {
+        if (statusTimer) {
+            clearInterval(statusTimer);
+        }
+        statusTimer = setInterval(updateStatus, 2000);
+        console.log('状态轮询已启动，间隔2秒');
+    }
+
+    // 停止状态轮询
+    function stopStatusPolling() {
+        if (statusTimer) {
+            clearInterval(statusTimer);
+            statusTimer = null;
+            console.log('状态轮询已停止');
+        }
+    }
+
+    // 更新状态显示
+    function updateStatus() {
+        console.log('正在查询爬虫状态...');
+        fetch('/crawler/status')
+            .then(response => response.json())
+            .then(data => {
+                console.log('爬虫状态查询结果:', data);
+                
+                // 检查爬虫状态变化 - 先保存旧状态
+                const oldStatus = {
+                    isRunning: isRunning,
+                    crawlStatus: window.lastCrawlStatus || "pending"
+                };
+                
+                // 更新状态显示
+                document.getElementById('status').textContent = data.is_running ? '运行中' : '已停止';
+                document.getElementById('currentPage').textContent = data.current_page;
+                document.getElementById('itemCount').textContent = data.item_count;
+                document.getElementById('loginStatus').textContent = data.is_waiting_login ? '等待登录' : '已登录';
+                
+                // 更新任务状态显示
+                const statusText = getCrawlStatusText(data.crawl_status);
+                document.getElementById('crawlStatus').textContent = statusText;
+                
+                // 检查是否有新的crawl_status
+                if (data.crawl_status && data.crawl_status !== oldStatus.crawlStatus) {
+                    console.log(`爬虫状态变化: ${oldStatus.crawlStatus} -> ${data.crawl_status}`);
+                    
+                    // 如果状态变为completed，显示完成通知
+                    if (data.crawl_status === "completed") {
+                        console.log('检测到爬虫完成状态');
+                        showCrawlCompletedAlert(data.item_count);
+                    }
+                    
+                    // 如果状态变为error，显示错误通知
+                    if (data.crawl_status === "error") {
+                        showCrawlErrorAlert("爬虫任务出错，请查看日志了解详情");
+                    }
+                    
+                    // 更新状态记录
+                    window.lastCrawlStatus = data.crawl_status;
+                }
+                
+                // 更新按钮状态
+                document.getElementById('startBtn').disabled = data.is_running;
+                document.getElementById('stopBtn').disabled = !data.is_running;
+                document.getElementById('confirmLoginBtn').disabled = !data.is_waiting_login;
+                document.getElementById('closeBrowserBtn').disabled = !(data.is_running || data.crawl_status === "completed" || data.crawl_status === "error");
+                
+                // 更新全局变量
+                isRunning = data.is_running;
+                isWaitingLogin = data.is_waiting_login;
+                currentPage = data.current_page;
+                itemCount = data.item_count;
+                
+                console.log(`状态更新: 运行=${isRunning}, 等待登录=${isWaitingLogin}, 页码=${currentPage}, 数量=${itemCount}, 状态=${data.crawl_status}`);
+            })
+            .catch(error => {
+                console.error('获取状态失败:', error);
+                // 发生错误时不要停止轮询
+            });
+    }
+
+    // 获取任务状态文本
+    function getCrawlStatusText(status) {
+        switch(status) {
+            case "pending": return "等待开始";
+            case "running": return "爬取中";
+            case "waiting_login": return "等待登录";
+            case "completed": return "爬取完成";
+            case "error": return "爬取出错";
+            default: return status || "未知状态";
+        }
+    }
+
+    // 显示爬虫完成提示
+    function showCrawlCompletedAlert(itemCount) {
+        // 更新状态区域
+        const statusBox = document.querySelector('.alert-info');
+        if (statusBox) {
+            statusBox.classList.remove('alert-info');
+            statusBox.classList.add('alert-success');
+            
+            // 添加完成标记
+            const statusTitle = statusBox.querySelector('h5');
+            if (statusTitle && !statusTitle.querySelector('.badge')) {
+                const completedTag = document.createElement('span');
+                completedTag.className = 'badge bg-success ms-2';
+                completedTag.textContent = '已完成';
+                statusTitle.appendChild(completedTag);
+            }
+        }
+        
+        // 创建通知元素
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-success alert-dismissible fade show mt-3';
+        alertDiv.role = 'alert';
+        alertDiv.innerHTML = `
+            <i class="bi bi-check-circle-fill"></i> <strong>爬虫任务已完成!</strong> 共获取了 ${itemCount} 条商品数据。
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        
+        // 添加到页面
+        const cardBody = document.querySelector('.card-body');
+        cardBody.insertBefore(alertDiv, cardBody.lastElementChild);
+        
+        // 弹出提示
+        alert(`爬虫任务已完成，共获取${itemCount}条商品数据！`);
+        
+        // 尝试播放提示音
+        try {
+            const audio = new Audio('/static/sounds/complete.mp3');
+            audio.play().catch(e => console.log('无法播放提示音:', e));
+        } catch (e) {
+            console.log('提示音播放失败:', e);
+        }
+    }
+    
+    // 显示爬虫错误提示
+    function showCrawlErrorAlert(message) {
+        // 创建通知元素
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-danger alert-dismissible fade show mt-3';
+        alertDiv.role = 'alert';
+        alertDiv.innerHTML = `
+            <i class="bi bi-exclamation-triangle-fill"></i> <strong>爬虫任务出错!</strong> ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        
+        // 添加到页面
+        const cardBody = document.querySelector('.card-body');
+        cardBody.insertBefore(alertDiv, cardBody.lastElementChild);
+        
+        // 弹出提示
+        alert(`爬虫任务出错: ${message}`);
+    }
+
+    // 启动爬虫
+    function startCrawler() {
+        const keyword = document.getElementById('keyword').value;
+        const pageStart = document.getElementById('pageStart').value;
+        const pageEnd = document.getElementById('pageEnd').value;
+        
+        if (!keyword) {
+            alert('请输入搜索关键词');
+            return;
+        }
+        
+        console.log(`开始爬取: 关键词=${keyword}, 页码范围=${pageStart}-${pageEnd}`);
+        
+        fetch('/crawler/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                keyword: keyword,
+                page_start: parseInt(pageStart),
+                page_end: parseInt(pageEnd)
+            })
+        })
+        .then(response => {
+            console.log('响应状态码:', response.status);
+            return response.json();
+        })
+        .then(data => {
+            console.log('爬虫启动响应:', data);
+            if (data.success) {
+                alert('爬虫启动成功，请在打开的浏览器中登录淘宝账号');
+                updateStatus(); // 立即更新状态
+            } else {
+                alert('爬虫启动失败: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('启动爬虫失败:', error);
+            alert('启动爬虫失败，请查看控制台了解详情');
+        });
+    }
+
+    // 确认登录
+    function confirmLogin() {
+        // 获取页面范围
+        const pageStart = document.getElementById('pageStart').value;
+        const pageEnd = document.getElementById('pageEnd').value;
+        
+        console.log(`确认登录: 页码范围=${pageStart}-${pageEnd}`);
+        
+        fetch('/crawler/confirm_login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                page_start: parseInt(pageStart),
+                page_end: parseInt(pageEnd)
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('确认登录响应:', data);
+            if (data.success) {
+                alert('登录确认成功，开始爬取数据');
+                updateStatus(); // 立即更新状态
+            } else {
+                alert('登录确认失败: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('确认登录失败:', error);
+            alert('确认登录失败，请查看控制台了解详情');
+        });
+    }
+
+    // 停止爬虫
+    function stopCrawler() {
+        console.log('正在停止爬虫...');
+        
+        fetch('/crawler/stop', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('停止爬虫响应:', data);
+            if (data.success) {
+                alert('爬虫已停止');
+                updateStatus(); // 立即更新状态
+            } else {
+                alert('停止爬虫失败: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('停止爬虫失败:', error);
+            alert('停止爬虫失败，请查看控制台了解详情');
+        });
+    }
+
+    // 关闭浏览器
+    function closeBrowser() {
+        console.log('正在关闭浏览器...');
+        
+        fetch('/crawler/close_browser', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('关闭浏览器响应:', data);
+            if (data.success) {
+                alert('浏览器已关闭');
+                updateStatus(); // 立即更新状态
+            } else {
+                alert('关闭浏览器失败: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('关闭浏览器失败:', error);
+            alert('关闭浏览器失败，请查看控制台了解详情');
+        });
+    }
+
+    // 清空数据
+    function clearData() {
+        if (!confirm('确定要清空所有爬取的数据吗？此操作不可恢复！')) {
+            return;
+        }
+        
+        console.log('正在清空数据...');
+        
+        fetch('/api/clear_data', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('清空数据响应:', data);
+            if (data.success) {
+                alert('数据已清空');
+            } else {
+                alert('清空数据失败: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('清空数据失败:', error);
+            alert('清空数据失败，请查看控制台了解详情');
+        });
+    }
+</script>
+{% endblock %} 

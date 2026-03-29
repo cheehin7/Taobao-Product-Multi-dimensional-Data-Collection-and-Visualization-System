@@ -1,0 +1,263 @@
+{% extends 'base.html' %}
+{% block page %}
+<div class="page-title">
+    <div class="row">
+        <div class="col-12 col-md-6 order-md-1 order-last">
+            <h3>用户管理</h3>
+            <p class="text-subtitle text-muted">管理系统用户</p>
+        </div>
+        <div class="col-12 col-md-6 order-md-2 order-first">
+            <nav aria-label="breadcrumb" class="breadcrumb-header">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/index">首页</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">用户管理</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+</div>
+
+<section class="section">
+    <div class="card">
+        <div class="card-header">
+            <h4 class="card-title">用户列表</h4>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-lg" id="users-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>用户名</th>
+                            <th>邮箱</th>
+                            <th>角色</th>
+                            <th>注册时间</th>
+                            <th>最后登录</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- 用户数据将在这里动态加载 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 修改用户角色和状态的模态框 -->
+<div class="modal fade" id="editUserModal" tabindex="-1" role="dialog" aria-labelledby="editUserModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editUserModalLabel">编辑用户</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="edit-user-id">
+                <div class="form-group">
+                    <label for="edit-username">用户名</label>
+                    <input type="text" class="form-control" id="edit-username" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="edit-role">角色</label>
+                    <select class="form-control" id="edit-role">
+                        <option value="user">普通用户</option>
+                        <option value="admin">管理员</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="edit-status">状态</label>
+                    <select class="form-control" id="edit-status">
+                        <option value="1">激活</option>
+                        <option value="0">禁用</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="save-user-btn">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 重置密码确认模态框 -->
+<div class="modal fade" id="resetPasswordModal" tabindex="-1" role="dialog" aria-labelledby="resetPasswordModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="resetPasswordModalLabel">重置密码</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="reset-user-id">
+                <p>您确定要重置 <span id="reset-username"></span> 的密码吗？</p>
+                <div id="new-password-container" style="display: none;">
+                    <div class="alert alert-success">
+                        新密码: <strong id="new-password"></strong>
+                    </div>
+                    <p class="text-warning">请记下这个密码，它只会显示一次！</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger" id="confirm-reset-btn">确认重置</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    $(document).ready(function() {
+        // 加载所有用户
+        loadUsers();
+        
+        // 保存用户信息
+        $('#save-user-btn').click(function() {
+            const userId = $('#edit-user-id').val();
+            const role = $('#edit-role').val();
+            const status = parseInt($('#edit-status').val());
+            
+            $.ajax({
+                url: `/api/users/${userId}`,
+                type: 'PUT',
+                contentType: 'application/json',
+                data: JSON.stringify({ role, status }),
+                success: function(response) {
+                    if (response.success) {
+                        toastr.success('用户信息更新成功');
+                        $('#editUserModal').modal('hide');
+                        loadUsers();
+                    } else {
+                        toastr.error(response.message || '更新失败');
+                    }
+                },
+                error: function(xhr) {
+                    const errorMsg = xhr.responseJSON ? xhr.responseJSON.message : '更新失败';
+                    toastr.error(errorMsg);
+                }
+            });
+        });
+        
+        // 重置密码按钮
+        $('#confirm-reset-btn').click(function() {
+            const userId = $('#reset-user-id').val();
+            
+            $.ajax({
+                url: `/api/users/${userId}/reset_password`,
+                type: 'POST',
+                success: function(response) {
+                    if (response.success) {
+                        $('#new-password').text(response.new_password);
+                        $('#new-password-container').show();
+                        $('#confirm-reset-btn').hide();
+                    } else {
+                        toastr.error(response.message || '重置密码失败');
+                        $('#resetPasswordModal').modal('hide');
+                    }
+                },
+                error: function(xhr) {
+                    const errorMsg = xhr.responseJSON ? xhr.responseJSON.message : '重置密码失败';
+                    toastr.error(errorMsg);
+                    $('#resetPasswordModal').modal('hide');
+                }
+            });
+        });
+        
+        // 重置密码模态框关闭时，重置状态
+        $('#resetPasswordModal').on('hidden.bs.modal', function() {
+            $('#new-password-container').hide();
+            $('#confirm-reset-btn').show();
+        });
+    });
+    
+    function loadUsers() {
+        $.ajax({
+            url: '/api/users',
+            type: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    renderUsersTable(response.users);
+                } else {
+                    toastr.error(response.message || '获取用户列表失败');
+                }
+            },
+            error: function(xhr) {
+                const errorMsg = xhr.responseJSON ? xhr.responseJSON.message : '获取用户列表失败';
+                toastr.error(errorMsg);
+            }
+        });
+    }
+    
+    function renderUsersTable(users) {
+        const tbody = $('#users-table tbody');
+        tbody.empty();
+        
+        users.forEach(function(user) {
+            const statusBadge = user.status === 1 
+                ? '<span class="badge bg-success">激活</span>' 
+                : '<span class="badge bg-danger">禁用</span>';
+            
+            const roleBadge = user.role === 'admin'
+                ? '<span class="badge bg-primary">管理员</span>'
+                : '<span class="badge bg-secondary">普通用户</span>';
+                
+            const row = `
+                <tr>
+                    <td>${user.id}</td>
+                    <td>${user.username}</td>
+                    <td>${user.email || '-'}</td>
+                    <td>${roleBadge}</td>
+                    <td>${user.register_time || '-'}</td>
+                    <td>${user.last_login || '-'}</td>
+                    <td>${statusBadge}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary edit-user-btn" data-id="${user.id}" 
+                                data-username="${user.username}" data-role="${user.role}" data-status="${user.status}">
+                            编辑
+                        </button>
+                        <button class="btn btn-sm btn-warning reset-password-btn" data-id="${user.id}" 
+                                data-username="${user.username}">
+                            重置密码
+                        </button>
+                    </td>
+                </tr>
+            `;
+            
+            tbody.append(row);
+        });
+        
+        // 绑定编辑用户按钮点击事件
+        $('.edit-user-btn').click(function() {
+            const userId = $(this).data('id');
+            const username = $(this).data('username');
+            const role = $(this).data('role');
+            const status = $(this).data('status');
+            
+            $('#edit-user-id').val(userId);
+            $('#edit-username').val(username);
+            $('#edit-role').val(role);
+            $('#edit-status').val(status);
+            
+            $('#editUserModal').modal('show');
+        });
+        
+        // 绑定重置密码按钮点击事件
+        $('.reset-password-btn').click(function() {
+            const userId = $(this).data('id');
+            const username = $(this).data('username');
+            
+            $('#reset-user-id').val(userId);
+            $('#reset-username').text(username);
+            
+            $('#resetPasswordModal').modal('show');
+        });
+    }
+</script>
+{% endblock %} 

@@ -1,0 +1,216 @@
+{% extends 'base.html' %}
+{% block page %}
+    <div class="page-title">
+        <div class="row">
+            <div class="col-12 col-md-6 order-md-1 order-last">
+                <h3>LDA主题分析</h3>
+                <p class="text-subtitle text-muted">淘宝商品评论LDA主题模型分析</p>
+            </div>
+            <div class="col-12 col-md-6 order-md-2 order-first">
+                <nav aria-label="breadcrumb" class="breadcrumb-header">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="/index">首页</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">LDA主题分析</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <section class="section">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between">
+                        <h4 class="card-title">积极评论主题分析</h4>
+                        <div>
+                            <button class="btn btn-primary" id="analyze-btn">重新分析</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered mb-0" id="positive-topics">
+                                <thead>
+                                    <tr>
+                                        <th>主题</th>
+                                        <th>关键词</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="loading-row">
+                                        <td colspan="2" class="text-center">
+                                            <div class="spinner-border text-primary" role="status">
+                                                <span class="visually-hidden">加载中...</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title">消极评论主题分析</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered mb-0" id="negative-topics">
+                                <thead>
+                                    <tr>
+                                        <th>主题</th>
+                                        <th>关键词</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="loading-row">
+                                        <td colspan="2" class="text-center">
+                                            <div class="spinner-border text-primary" role="status">
+                                                <span class="visually-hidden">加载中...</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title">LDA主题分析说明</h4>
+                    </div>
+                    <div class="card-body">
+                        <p>LDA（Latent Dirichlet Allocation，潜在狄利克雷分配）是一种文本主题模型，能够将文档集中每篇文档的主题按照概率分布的形式给出。</p>
+                        <p>通过LDA主题分析，可以自动发现评论文本中隐含的主题结构，帮助理解用户对产品的主要关注点。</p>
+                        <ul>
+                            <li><strong>积极评论主题分析</strong>：从评分较高的评论中提取主要话题，了解用户满意的方面</li>
+                            <li><strong>消极评论主题分析</strong>：从评分较低的评论中提取主要话题，发现需要改进的方面</li>
+                        </ul>
+                        <div id="status-message" class="alert alert-info mt-3" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const positiveTopicsTable = document.getElementById('positive-topics');
+            const negativeTopicsTable = document.getElementById('negative-topics');
+            const analyzeBtn = document.getElementById('analyze-btn');
+            const statusMessage = document.getElementById('status-message');
+            
+            function loadTopics() {
+                // 显示加载状态
+                positiveTopicsTable.querySelector('tbody').innerHTML = `
+                    <tr class="loading-row">
+                        <td colspan="2" class="text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">加载中...</span>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                negativeTopicsTable.querySelector('tbody').innerHTML = `
+                    <tr class="loading-row">
+                        <td colspan="2" class="text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">加载中...</span>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                
+                // 从API获取数据
+                fetch('/api/lda_topics')
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('网络响应不正常');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        // 更新积极主题表格
+                        let positiveHtml = '';
+                        data.positive_topics.forEach((topic, index) => {
+                            positiveHtml += `
+                                <tr>
+                                    <td>主题${index + 1}</td>
+                                    <td>${topic.join('、')}</td>
+                                </tr>
+                            `;
+                        });
+                        positiveTopicsTable.querySelector('tbody').innerHTML = positiveHtml || '<tr><td colspan="2" class="text-center">暂无数据</td></tr>';
+                        
+                        // 更新消极主题表格
+                        let negativeHtml = '';
+                        data.negative_topics.forEach((topic, index) => {
+                            negativeHtml += `
+                                <tr>
+                                    <td>主题${index + 1}</td>
+                                    <td>${topic.join('、')}</td>
+                                </tr>
+                            `;
+                        });
+                        negativeTopicsTable.querySelector('tbody').innerHTML = negativeHtml || '<tr><td colspan="2" class="text-center">暂无数据</td></tr>';
+                    })
+                    .catch(error => {
+                        console.error('获取数据失败:', error);
+                        
+                        // 显示错误信息
+                        positiveTopicsTable.querySelector('tbody').innerHTML = '<tr><td colspan="2" class="text-center text-danger">加载失败</td></tr>';
+                        negativeTopicsTable.querySelector('tbody').innerHTML = '<tr><td colspan="2" class="text-center text-danger">加载失败</td></tr>';
+                        
+                        statusMessage.style.display = 'block';
+                        statusMessage.className = 'alert alert-danger mt-3';
+                        statusMessage.textContent = '获取主题数据失败: ' + error.message;
+                    });
+            }
+            
+            // 页面加载完成后加载主题数据
+            loadTopics();
+            
+            // 绑定重新分析按钮事件
+            analyzeBtn.addEventListener('click', function() {
+                analyzeBtn.disabled = true;
+                statusMessage.style.display = 'block';
+                statusMessage.textContent = '正在进行LDA主题分析，这可能需要几分钟时间...';
+                statusMessage.className = 'alert alert-info mt-3';
+                
+                // 发送请求重新分析
+                fetch('/analyze_lda', {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        statusMessage.className = 'alert alert-success mt-3';
+                        statusMessage.textContent = 'LDA主题分析完成！';
+                        // 重新加载主题数据
+                        loadTopics();
+                    } else {
+                        statusMessage.className = 'alert alert-danger mt-3';
+                        statusMessage.textContent = 'LDA主题分析失败：' + data.message;
+                    }
+                })
+                .catch(error => {
+                    statusMessage.className = 'alert alert-danger mt-3';
+                    statusMessage.textContent = '请求出错：' + error.message;
+                })
+                .finally(() => {
+                    analyzeBtn.disabled = false;
+                });
+            });
+        });
+    </script>
+{% endblock %} 

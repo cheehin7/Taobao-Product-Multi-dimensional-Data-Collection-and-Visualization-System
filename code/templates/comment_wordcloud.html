@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+{% block page %}
+    <div class="page-title">
+        <div class="row">
+            <div class="col-12 col-md-6 order-md-1 order-last">
+                <h3>评论词云分析</h3>
+                <p class="text-subtitle text-muted">淘宝商品评论词频统计可视化分析</p>
+            </div>
+            <div class="col-12 col-md-6 order-md-2 order-first">
+                <nav aria-label="breadcrumb" class="breadcrumb-header">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="/index">首页</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">评论词云分析</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <section class="section">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title">评论词云图</h4>
+                    </div>
+                    <div class="card-body">
+                        <div id="wordcloud-container" class="text-center">
+                            <img id="wordcloud-image" src="../static/images/beautifulcloud.png" alt="词云图" style="max-width: 100%; max-height: 600px;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between">
+                        <h4 class="card-title">词云分析说明</h4>
+                        <div>
+                            <button class="btn btn-secondary me-2" id="refresh-btn">刷新图片</button>
+                            <button class="btn btn-primary" id="generate-btn">重新生成词云</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <p>词云图展示了商品评论中出现频率最高的关键词，字体大小代表词频高低，可以直观反映客户对产品的关注点。</p>
+                        <div id="status-message" class="alert alert-info mt-3" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const generateBtn = document.getElementById('generate-btn');
+            const refreshBtn = document.getElementById('refresh-btn');
+            const statusMessage = document.getElementById('status-message');
+            const wordcloudImage = document.getElementById('wordcloud-image');
+            
+            // 防止缓存的更新图片函数，通过时间戳和随机数确保每次都是新的图片请求
+            function updateImage() {
+                // 强制浏览器请求新图片，而不使用缓存
+                const timestamp = new Date().getTime();
+                const randomNum = Math.floor(Math.random() * 1000000);
+                const currentSrc = '../static/images/beautifulcloud.png';
+                
+                // 使用时间戳和随机数确保URL是唯一的
+                wordcloudImage.src = `${currentSrc}?t=${timestamp}&r=${randomNum}`;
+                
+                // 可选：强制清除旧图片
+                wordcloudImage.onload = function() {
+                    // 图片加载成功
+                    statusMessage.className = 'alert alert-success mt-3';
+                    statusMessage.textContent = '图片已更新！';
+                    statusMessage.style.display = 'block';
+                    
+                    // 2秒后隐藏消息
+                    setTimeout(() => {
+                        statusMessage.style.display = 'none';
+                    }, 2000);
+                };
+                
+                wordcloudImage.onerror = function() {
+                    // 图片加载失败
+                    statusMessage.className = 'alert alert-danger mt-3';
+                    statusMessage.textContent = '图片加载失败，请稍后再试';
+                    statusMessage.style.display = 'block';
+                };
+            }
+            
+            // 加载页面时更新图片
+            updateImage();
+            
+            // 绑定刷新图片按钮事件
+            refreshBtn.addEventListener('click', function() {
+                statusMessage.style.display = 'block';
+                statusMessage.className = 'alert alert-info mt-3';
+                statusMessage.textContent = '正在刷新图片...';
+                updateImage();
+            });
+            
+            // 绑定重新生成按钮事件
+            generateBtn.addEventListener('click', function() {
+                generateBtn.disabled = true;
+                refreshBtn.disabled = true;
+                statusMessage.style.display = 'block';
+                statusMessage.className = 'alert alert-info mt-3';
+                statusMessage.textContent = '正在生成词云，请稍候...';
+                
+                // 发送请求生成新的词云图
+                fetch('/generate_wordcloud', {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        statusMessage.className = 'alert alert-success mt-3';
+                        statusMessage.textContent = '词云生成成功！';
+                        // 更新图片（添加时间戳防止缓存）
+                        updateImage();
+                    } else {
+                        statusMessage.className = 'alert alert-danger mt-3';
+                        statusMessage.textContent = '词云生成失败：' + data.message;
+                    }
+                })
+                .catch(error => {
+                    statusMessage.className = 'alert alert-danger mt-3';
+                    statusMessage.textContent = '请求出错：' + error.message;
+                })
+                .finally(() => {
+                    generateBtn.disabled = false;
+                    refreshBtn.disabled = false;
+                });
+            });
+        });
+    </script>
+{% endblock %} 

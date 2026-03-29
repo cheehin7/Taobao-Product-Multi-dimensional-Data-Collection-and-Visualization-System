@@ -1,0 +1,278 @@
+{% extends 'base.html' %}
+{% block page %}
+    <div class="page-title">
+        <div class="row">
+            <div class="col-12 col-md-6 order-md-1 order-last">
+                <h3>Bayes评论分类</h3>
+                <p class="text-subtitle text-muted">基于朴素贝叶斯的评论情感分类分析</p>
+            </div>
+            <div class="col-12 col-md-6 order-md-2 order-first">
+                <nav aria-label="breadcrumb" class="breadcrumb-header">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="/index">首页</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">Bayes评论分类</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <section class="section">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title">评论分类结果</h4>
+                    </div>
+                    <div class="card-body">
+                        <div id="classification-chart" style="height: 400px;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title">分类准确率</h4>
+                    </div>
+                    <div class="card-body text-center">
+                        <div class="progress progress-primary mb-4">
+                            <div id="accuracy-bar" class="progress-bar progress-bar-striped" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                        <h3 id="accuracy-value">0%</h3>
+                        <p class="text-muted">分类准确率</p>
+                    </div>
+                </div>
+                
+                <div class="card mt-4">
+                    <div class="card-header d-flex justify-content-between">
+                        <h4 class="card-title">操作</h4>
+                    </div>
+                    <div class="card-body">
+                        <button class="btn btn-primary btn-block mb-3" id="analyze-btn">重新训练模型</button>
+                        <div id="status-message" class="alert alert-info" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title">评论分类预测结果（抽样）</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-bordered mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>评论内容</th>
+                                        <th>实际评分</th>
+                                        <th>预测分类</th>
+                                        <th>是否正确</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="prediction-results">
+                                    <tr>
+                                        <td colspan="4" class="text-center">
+                                            <div class="spinner-border text-primary" role="status">
+                                                <span class="visually-hidden">加载中...</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title">Bayes评论分类说明</h4>
+                    </div>
+                    <div class="card-body">
+                        <p>朴素贝叶斯（Naive Bayes）是一种基于贝叶斯定理与特征条件独立假设的分类方法，是一种简单但有效的分类算法。</p>
+                        <p>在评论分类中，我们将评论分为两类：</p>
+                        <ul>
+                            <li><strong>积极评论</strong>：评分为4-5分的评论</li>
+                            <li><strong>消极评论</strong>：评分为1-3分的评论</li>
+                        </ul>
+                        <p>模型训练后，可以根据评论内容预测其情感倾向，分类准确率显示了模型预测的准确程度。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 确保引入ECharts库 -->
+    <script src="../static/vendors/echarts/echarts.min.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 初始化图表
+            const classificationChart = echarts.init(document.getElementById('classification-chart'));
+            const accuracyBar = document.getElementById('accuracy-bar');
+            const accuracyValue = document.getElementById('accuracy-value');
+            const analyzeBtn = document.getElementById('analyze-btn');
+            const statusMessage = document.getElementById('status-message');
+            const predictionResults = document.getElementById('prediction-results');
+            
+            // 先显示加载中
+            classificationChart.showLoading();
+            
+            function loadResults() {
+                // 从API获取数据
+                fetch('/api/bayes_classification')
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('网络响应不正常');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        // 隐藏加载状态
+                        classificationChart.hideLoading();
+                        
+                        // 更新准确率
+                        const accuracy = data.accuracy * 100;
+                        accuracyValue.textContent = accuracy.toFixed(2) + '%';
+                        accuracyBar.style.width = accuracy + '%';
+                        accuracyBar.setAttribute('aria-valuenow', accuracy);
+                        
+                        // 配置分类结果图表
+                        const option = {
+                            title: {
+                                text: '评论分类预测结果'
+                            },
+                            tooltip: {
+                                trigger: 'item',
+                                formatter: '{b}: {c} ({d}%)'
+                            },
+                            legend: {
+                                orient: 'vertical',
+                                left: 'left',
+                                data: ['预测正确-积极', '预测正确-消极', '预测错误-积极', '预测错误-消极']
+                            },
+                            series: [
+                                {
+                                    name: '分类结果',
+                                    type: 'pie',
+                                    radius: '55%',
+                                    center: ['50%', '60%'],
+                                    data: [
+                                        {
+                                            value: data.correct_positive, 
+                                            name: '预测正确-积极', 
+                                            itemStyle: {color: '#91cc75'}
+                                        },
+                                        {
+                                            value: data.correct_negative, 
+                                            name: '预测正确-消极', 
+                                            itemStyle: {color: '#5470c6'}
+                                        },
+                                        {
+                                            value: data.wrong_positive, 
+                                            name: '预测错误-积极', 
+                                            itemStyle: {color: '#fac858'}
+                                        },
+                                        {
+                                            value: data.wrong_negative, 
+                                            name: '预测错误-消极', 
+                                            itemStyle: {color: '#ee6666'}
+                                        }
+                                    ],
+                                    emphasis: {
+                                        itemStyle: {
+                                            shadowBlur: 10,
+                                            shadowOffsetX: 0,
+                                            shadowColor: 'rgba(0, 0, 0, 0.5)'
+                                        }
+                                    }
+                                }
+                            ]
+                        };
+                        
+                        // 设置图表
+                        classificationChart.setOption(option);
+                        
+                        // 更新预测结果表格
+                        let resultsHtml = '';
+                        data.samples.forEach(sample => {
+                            resultsHtml += `
+                                <tr>
+                                    <td>${sample.content}</td>
+                                    <td>${sample.actual_score >= 4 ? '积极 ('+sample.actual_score+')' : '消极 ('+sample.actual_score+')'}</td>
+                                    <td>${sample.predicted == 2 ? '积极' : '消极'}</td>
+                                    <td>${sample.is_correct ? 
+                                        '<span class="badge bg-success">正确</span>' : 
+                                        '<span class="badge bg-danger">错误</span>'}
+                                    </td>
+                                </tr>
+                            `;
+                        });
+                        
+                        predictionResults.innerHTML = resultsHtml || '<tr><td colspan="4" class="text-center">暂无数据</td></tr>';
+                    })
+                    .catch(error => {
+                        console.error('获取数据失败:', error);
+                        classificationChart.hideLoading();
+                        
+                        // 显示错误信息
+                        statusMessage.style.display = 'block';
+                        statusMessage.className = 'alert alert-danger';
+                        statusMessage.textContent = '获取数据失败: ' + error.message;
+                        
+                        predictionResults.innerHTML = '<tr><td colspan="4" class="text-center text-danger">加载失败</td></tr>';
+                    });
+            }
+            
+            // 页面加载完成后加载结果
+            loadResults();
+            
+            // 窗口大小改变时，重新调整图表大小
+            window.addEventListener('resize', function() {
+                classificationChart.resize();
+            });
+            
+            // 绑定重新训练按钮事件
+            analyzeBtn.addEventListener('click', function() {
+                analyzeBtn.disabled = true;
+                statusMessage.style.display = 'block';
+                statusMessage.textContent = '正在训练贝叶斯分类器，这可能需要几分钟时间...';
+                statusMessage.className = 'alert alert-info';
+                
+                classificationChart.showLoading();
+                
+                // 发送请求重新训练
+                fetch('/train_bayes', {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        statusMessage.className = 'alert alert-success';
+                        statusMessage.textContent = '贝叶斯模型训练完成！';
+                        // 重新加载结果
+                        loadResults();
+                    } else {
+                        statusMessage.className = 'alert alert-danger';
+                        statusMessage.textContent = '模型训练失败：' + data.message;
+                        classificationChart.hideLoading();
+                    }
+                })
+                .catch(error => {
+                    statusMessage.className = 'alert alert-danger';
+                    statusMessage.textContent = '请求出错：' + error.message;
+                    classificationChart.hideLoading();
+                })
+                .finally(() => {
+                    analyzeBtn.disabled = false;
+                });
+            });
+        });
+    </script>
+{% endblock %} 

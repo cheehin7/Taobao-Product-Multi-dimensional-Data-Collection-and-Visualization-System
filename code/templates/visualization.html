@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+{% block page %}
+    <div class="page-title">
+        <div class="row">
+            <div class="col-12 col-md-6 order-md-1 order-last">
+                <h3>商品数据可视化分析</h3>
+                <p class="text-subtitle text-muted">淘宝商品数据的多维度可视化展示</p>
+            </div>
+            <div class="col-12 col-md-6 order-md-2 order-first">
+                <nav aria-label="breadcrumb" class="breadcrumb-header">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="/index">首页</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">数据可视化</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <section class="section">
+        <div class="row">
+            <!-- 可视化导航卡片 -->
+            <div class="col-md-6 col-lg-3 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <div class="mb-3">
+                            <i class="bi bi-cash-stack" style="font-size: 3rem; color: #4e73df;"></i>
+                        </div>
+                        <h5 class="card-title">价格分布</h5>
+                        <p class="card-text">商品价格区间分布分析</p>
+                        <a href="/visualization_price" class="btn btn-primary">查看详情</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-3 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <div class="mb-3">
+                            <i class="bi bi-bar-chart-line" style="font-size: 3rem; color: #1cc88a;"></i>
+                        </div>
+                        <h5 class="card-title">销量排行</h5>
+                        <p class="card-text">商品销量TOP10排行榜</p>
+                        <a href="/visualization_xiaoliang" class="btn btn-primary">查看详情</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-3 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <div class="mb-3">
+                            <i class="bi bi-geo-alt" style="font-size: 3rem; color: #36b9cc;"></i>
+                        </div>
+                        <h5 class="card-title">地区分布</h5>
+                        <p class="card-text">商品来源地区分布情况</p>
+                        <a href="/visualization_location" class="btn btn-primary">查看详情</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-3 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <div class="mb-3">
+                            <i class="bi bi-truck" style="font-size: 3rem; color: #f6c23e;"></i>
+                        </div>
+                        <h5 class="card-title">包邮比例</h5>
+                        <p class="card-text">包邮与非包邮商品对比</p>
+                        <a href="/visualization_baoyou" class="btn btn-primary">查看详情</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <!-- 爬取时间分布 -->
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title">商品爬取时间分布</h4>
+                    </div>
+                    <div class="card-body">
+                        <div id="timeChart" style="height: 350px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 确保引入ECharts库 -->
+    <script src="../static/vendors/echarts/echarts.min.js"></script>
+
+    <script>
+        // 页面加载完成后执行
+        document.addEventListener('DOMContentLoaded', function() {
+            // 初始化图表
+            var timeChart = echarts.init(document.getElementById('timeChart'));
+            
+            // 先显示加载中
+            timeChart.showLoading();
+            
+            // 从API获取数据
+            fetch('/api/visualization_data')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('网络响应不正常');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // 隐藏加载
+                    timeChart.hideLoading();
+                    
+                    // 配置时间分布图表
+                    var timeOption = {
+                        title: {
+                            text: '商品爬取时间分布'
+                        },
+                        tooltip: {
+                            trigger: 'axis'
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: data.time_labels,
+                            name: '日期'
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: '商品数量'
+                        },
+                        series: [{
+                            data: data.time_counts,
+                            type: 'line',
+                            smooth: true,
+                            lineStyle: {
+                                color: '#e74a3b'
+                            },
+                            areaStyle: {
+                                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                    {
+                                        offset: 0,
+                                        color: 'rgba(231, 74, 59, 0.8)'
+                                    },
+                                    {
+                                        offset: 1,
+                                        color: 'rgba(231, 74, 59, 0.1)'
+                                    }
+                                ])
+                            }
+                        }]
+                    };
+                    
+                    // 使用配置项设置图表
+                    timeChart.setOption(timeOption);
+                    
+                    // 窗口大小改变时，重新调整图表大小
+                    window.addEventListener('resize', function() {
+                        timeChart.resize();
+                    });
+                })
+                .catch(error => {
+                    console.error('获取数据失败:', error);
+                    // 隐藏加载
+                    timeChart.hideLoading();
+                    
+                    // 显示错误信息
+                    alert('获取数据失败: ' + error.message);
+                });
+        });
+    </script>
+{% endblock %} 

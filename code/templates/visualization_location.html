@@ -1,0 +1,235 @@
+{% extends 'base.html' %}
+{% block page %}
+    <div class="page-title">
+        <div class="row">
+            <div class="col-12 col-md-6 order-md-1 order-last">
+                <h3>商品地区分布分析</h3>
+                <p class="text-subtitle text-muted">淘宝商品来源地区统计分析</p>
+            </div>
+            <div class="col-12 col-md-6 order-md-2 order-first">
+                <nav aria-label="breadcrumb" class="breadcrumb-header">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="/index">首页</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">地区分布</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <section class="section">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title">商品地区分布 - 中国地图</h4>
+                    </div>
+                    <div class="card-body">
+                        <div id="mapChart" style="height: 600px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title">地区分布详细数据</h4>
+                    </div>
+                    <div class="card-body">
+                        <div id="locationBarChart" style="height: 350px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 确保引入ECharts库 -->
+    <script src="../static/vendors/echarts/echarts.min.js"></script>
+    <!-- 引入中国地图数据 -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts/map/js/china.js"></script>
+
+    <script>
+        // 页面加载完成后执行
+        document.addEventListener('DOMContentLoaded', function() {
+            // 初始化图表
+            var mapChart = echarts.init(document.getElementById('mapChart'));
+            var locationBarChart = echarts.init(document.getElementById('locationBarChart'));
+            
+            // 先显示加载中
+            mapChart.showLoading();
+            locationBarChart.showLoading();
+            
+            // 从API获取数据
+            fetch('/api/visualization_data?type=location')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('网络响应不正常');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // 隐藏加载
+                    mapChart.hideLoading();
+                    locationBarChart.hideLoading();
+                    
+                    // 确保省份数据正确格式化为地图可用
+                    var mapData = data.province_data || [];
+                    
+                    // 计算最大值，用于地图颜色比例尺
+                    var maxValue = 0;
+                    if (mapData.length > 0) {
+                        maxValue = Math.max(...mapData.map(item => item.value));
+                    }
+                    
+                    // 配置中国地图
+                    var mapOption = {
+                        title: {
+                            text: '淘宝商品来源地区分布',
+                            subtext: '按省份统计',
+                            left: 'center'
+                        },
+                        tooltip: {
+                            trigger: 'item',
+                            formatter: '{b}: {c} 个商品'
+                        },
+                        visualMap: {
+                            min: 0,
+                            max: maxValue,
+                            left: 'left',
+                            top: 'bottom',
+                            text: ['高', '低'],
+                            calculable: true,
+                            inRange: {
+                                color: ['#e0f7fa', '#4dd0e1', '#0097a7', '#006064']
+                            }
+                        },
+                        toolbox: {
+                            show: true,
+                            orient: 'vertical',
+                            left: 'right',
+                            top: 'center',
+                            feature: {
+                                dataView: { readOnly: false },
+                                restore: {},
+                                saveAsImage: {}
+                            }
+                        },
+                        series: [
+                            {
+                                name: '商品数量',
+                                type: 'map',
+                                map: 'china',
+                                roam: true,
+                                emphasis: {
+                                    label: {
+                                        show: true
+                                    }
+                                },
+                                data: mapData,
+                                label: {
+                                    show: true,
+                                    color: '#333',
+                                    fontSize: 10
+                                }
+                            }
+                        ]
+                    };
+                    
+                    // 使用配置项设置地图
+                    mapChart.setOption(mapOption);
+                    
+                    // 准备柱状图数据 - 按照数量排序
+                    var sortedLocations = [...data.locations].sort((a, b) => b.value - a.value);
+                    var barLabels = sortedLocations.map(item => item.name);
+                    var barValues = sortedLocations.map(item => item.value);
+                    
+                    // 只显示前15个地区数据，避免数据过多
+                    if (barLabels.length > 15) {
+                        barLabels = barLabels.slice(0, 15);
+                        barValues = barValues.slice(0, 15);
+                    }
+                    
+                    // 配置地区分布柱状图
+                    var locationBarOption = {
+                        title: {
+                            text: '商品数量最多的省份Top15'
+                        },
+                        tooltip: {
+                            trigger: 'axis',
+                            axisPointer: {
+                                type: 'shadow'
+                            }
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: barLabels,
+                            axisLabel: {
+                                interval: 0,
+                                rotate: 30
+                            }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: '商品数量'
+                        },
+                        series: [{
+                            data: barValues,
+                            type: 'bar',
+                            itemStyle: {
+                                color: function(params) {
+                                    // 不同地区使用不同的颜色
+                                    var colorList = [
+                                        '#36b9cc', '#4e73df', '#1cc88a', 
+                                        '#f6c23e', '#e74a3b', '#fd7e14',
+                                        '#6f42c1', '#20c9a6', '#5a5c69', '#858796'
+                                    ];
+                                    return colorList[params.dataIndex % colorList.length];
+                                }
+                            },
+                            label: {
+                                show: true,
+                                position: 'top',
+                                formatter: '{c}'
+                            }
+                        }]
+                    };
+                    
+                    // 使用配置项设置柱状图
+                    locationBarChart.setOption(locationBarOption);
+                    
+                    // 窗口大小改变时，重新调整图表大小
+                    window.addEventListener('resize', function() {
+                        mapChart.resize();
+                        locationBarChart.resize();
+                    });
+                })
+                .catch(error => {
+                    console.error('获取数据失败:', error);
+                    // 隐藏加载
+                    mapChart.hideLoading();
+                    locationBarChart.hideLoading();
+                    
+                    // 显示错误信息
+                    mapChart.setOption({
+                        title: {
+                            text: '获取数据失败',
+                            subtext: error.message,
+                            left: 'center',
+                            top: 'center'
+                        }
+                    });
+                    
+                    locationBarChart.setOption({
+                        title: {
+                            text: '获取数据失败',
+                            subtext: error.message,
+                            left: 'center',
+                            top: 'center'
+                        }
+                    });
+                });
+        });
+    </script>
+{% endblock %} 

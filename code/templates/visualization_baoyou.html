@@ -1,0 +1,202 @@
+{% extends 'base.html' %}
+{% block page %}
+    <div class="page-title">
+        <div class="row">
+            <div class="col-12 col-md-6 order-md-1 order-last">
+                <h3>包邮比例分析</h3>
+                <p class="text-subtitle text-muted">淘宝商品包邮与非包邮比例分析</p>
+            </div>
+            <div class="col-12 col-md-6 order-md-2 order-first">
+                <nav aria-label="breadcrumb" class="breadcrumb-header">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="/index">首页</a></li>
+                        <li class="breadcrumb-item"><a href="/visualization">数据可视化</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">包邮比例</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <section class="section">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title">包邮与非包邮商品比例</h4>
+                    </div>
+                    <div class="card-body">
+                        <div id="shippingChart" style="height: 350px;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title">包邮比例详情</h4>
+                    </div>
+                    <div class="card-body">
+                        <div id="shippingBarChart" style="height: 350px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 确保引入ECharts库 -->
+    <script src="../static/vendors/echarts/echarts.min.js"></script>
+
+    <script>
+        // 页面加载完成后执行
+        document.addEventListener('DOMContentLoaded', function() {
+            // 初始化图表
+            var shippingChart = echarts.init(document.getElementById('shippingChart'));
+            var shippingBarChart = echarts.init(document.getElementById('shippingBarChart'));
+            
+            // 先显示加载中
+            shippingChart.showLoading();
+            shippingBarChart.showLoading();
+            
+            // 从API获取数据
+            fetch('/api/visualization_data?type=shipping')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('网络响应不正常');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // 隐藏加载
+                    shippingChart.hideLoading();
+                    shippingBarChart.hideLoading();
+                    
+                    // 创建数据对象
+                    const shippingData = [
+                        { value: data.shipping_free, name: '包邮', itemStyle: { color: '#36b9cc' } },
+                        { value: data.shipping_not_free, name: '不包邮', itemStyle: { color: '#f6c23e' } }
+                    ];
+                    
+                    // 计算百分比
+                    const total = data.shipping_free + data.shipping_not_free;
+                    const freePercent = ((data.shipping_free / total) * 100).toFixed(2);
+                    const notFreePercent = ((data.shipping_not_free / total) * 100).toFixed(2);
+                    
+                    // 配置环形图
+                    var shippingOption = {
+                        title: {
+                            text: '包邮与非包邮商品比例',
+                            left: 'center',
+                            subtext: `总商品数: ${total}件`,
+                            subtextStyle: {
+                                fontSize: 14
+                            }
+                        },
+                        tooltip: {
+                            trigger: 'item',
+                            formatter: '{a} <br/>{b}: {c}件 ({d}%)'
+                        },
+                        legend: {
+                            orient: 'vertical',
+                            left: 'left',
+                            data: ['包邮', '不包邮']
+                        },
+                        series: [{
+                            name: '包邮情况',
+                            type: 'pie',
+                            radius: ['40%', '70%'],
+                            avoidLabelOverlap: false,
+                            itemStyle: {
+                                borderRadius: 10,
+                                borderColor: '#fff',
+                                borderWidth: 2
+                            },
+                            label: {
+                                show: true,
+                                position: 'outside',
+                                formatter: '{b}: {c}件 ({d}%)'
+                            },
+                            emphasis: {
+                                label: {
+                                    show: true,
+                                    fontSize: '20',
+                                    fontWeight: 'bold'
+                                }
+                            },
+                            labelLine: {
+                                show: true
+                            },
+                            data: shippingData
+                        }]
+                    };
+                    
+                    // 使用配置项设置图表
+                    shippingChart.setOption(shippingOption);
+                    
+                    // 配置柱状图
+                    var shippingBarOption = {
+                        title: {
+                            text: '包邮与非包邮数量对比'
+                        },
+                        tooltip: {
+                            trigger: 'axis',
+                            axisPointer: {
+                                type: 'shadow'
+                            }
+                        },
+                        legend: {
+                            data: ['商品数量']
+                        },
+                        grid: {
+                            left: '3%',
+                            right: '4%',
+                            bottom: '3%',
+                            containLabel: true
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: ['包邮', '不包邮'],
+                            axisTick: {
+                                alignWithLabel: true
+                            }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: '商品数量'
+                        },
+                        series: [{
+                            name: '商品数量',
+                            type: 'bar',
+                            barWidth: '60%',
+                            data: [
+                                {value: data.shipping_free, itemStyle: {color: '#36b9cc'}},
+                                {value: data.shipping_not_free, itemStyle: {color: '#f6c23e'}}
+                            ],
+                            label: {
+                                show: true,
+                                position: 'top',
+                                formatter: '{c}件'
+                            }
+                        }]
+                    };
+                    
+                    // 使用配置项设置柱状图
+                    shippingBarChart.setOption(shippingBarOption);
+                    
+                    // 窗口大小改变时，重新调整所有图表大小
+                    window.addEventListener('resize', function() {
+                        shippingChart.resize();
+                        shippingBarChart.resize();
+                    });
+                })
+                .catch(error => {
+                    console.error('获取数据失败:', error);
+                    // 隐藏加载
+                    shippingChart.hideLoading();
+                    shippingBarChart.hideLoading();
+                    
+                    // 显示错误信息
+                    alert('获取数据失败: ' + error.message);
+                });
+        });
+    </script>
+{% endblock %} 

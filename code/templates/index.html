@@ -1,0 +1,919 @@
+{% extends 'base.html' %}
+{% block page %}
+
+
+    <div class="page-heading">
+
+
+
+        <div class="page-title">
+            <div class="row">
+                <div class="col-12 col-md-6 order-md-1 order-last">
+                    <h3>商品数据概览</h3>
+                </div>
+                <div class="col-12 col-md-6 order-md-2 order-first text-end">
+                    <!-- 这里移除了数据爬取按钮 -->
+                </div>
+            </div>
+            <section class="section">
+                <div class="card">
+
+                    <div class="card-body">
+                        <table class="table table-striped" id="table1">
+                            <thead>
+                            <tr>
+                                <th width="150">商品名称/标题</th>
+                                <th width="80">价格(元)</th>
+                                <th width="80">成交量</th>
+                                <th width="100">商家名称</th>
+                                <th width="100">商家位置</th>
+                                <th width="80">是否包邮</th>
+                                <th width="80">已获取评论数</th>
+                                <th width="120">获取时间</th>
+                                <th width="200">操作</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {% for item in data.data %}
+                                <tr>
+                                    <td>{{ item.title }}</td>
+                                    <td>{{ item.price }}</td>
+                                    <td>{{ item.deal_count }}</td>
+                                    <td>{{ item.shop_name }}</td>
+                                    <td>{{ item.location }}</td>
+                                    <td>{{ item.post_text|default("/") }}</td>
+                                    <td>{{ item.comment_fetched|default("0") }}</td>
+                                    <td>{{ item.fetch_time|default("未获取") }}</td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-primary get-comments" data-id="{{ item.id }}" data-title="{{ item.title }}" data-url="{{ item.title_url }}">
+                                            获取评论
+                                        </button>
+                                        {% if item.comment_fetched and item.comment_fetched|int > 0 %}
+                                        <button type="button" class="btn btn-sm btn-danger delete-comments" data-id="{{ item.id }}" data-title="{{ item.title }}">
+                                            删除评论
+                                        </button>
+                                        {% endif %}
+                                        <button type="button" class="btn btn-sm btn-warning view-comments" data-id="{{ item.id }}" data-title="{{ item.title }}">
+                                            查看评论
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-info view-details" data-url="{{ item.title_url }}">
+                                            详情
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-success view-shop" data-url="{{ item.shop_url }}">
+                                            店铺
+                                        </button>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </section>
+{#            <div class="row">#}
+{#                <a href="#" class="btn btn-outline-success" onclick="start()">开始清洗</a>#}
+{#            </div>#}
+            <section class="section mt-5" id="tb1" hidden="hidden">
+                <div class="card">
+
+                    <div class="card-body">
+                        <table class="table table-striped" id="table2">
+                            <thead>
+                            <tr>
+                                <th>商品名称/标题</th>
+                                <th>价格(元)</th>
+                                <th>成交量</th>
+                                <th>商家名称</th>
+                                <th>商家位置</th>
+                                <th>是否包邮</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {% for item in data.data1 %}
+                                <tr>
+                                    <td>{{ item.title }}</td>
+                                    <td>{{ item.price }}</td>
+                                    <td>{{ item.deal_count }}</td>
+                                    <td>{{ item.shop_name }}</td>
+                                    <td>{{ item.location }}</td>
+                                    <td>{{ item.post_text|default("/") }}</td>
+                                </tr>
+                            {% endfor %}
+
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </section>
+        </div>
+    </div>
+
+    <!-- 错误信息显示区域 -->
+    {% if error %}
+    <div class="alert alert-danger">
+        <h4 class="alert-heading">出错了！</h4>
+        <p>{{ error }}</p>
+        <hr>
+        <p class="mb-0">请检查数据库连接或尝试爬取一些数据。</p>
+    </div>
+    {% endif %}
+
+    <!-- 消息提示 -->
+    {% if message %}
+    <div class="alert alert-info">
+        <h4 class="alert-heading">提示信息</h4>
+        <p>{{ message }}</p>
+    </div>
+    {% endif %}
+
+    <!-- 数据为空提示 -->
+    {% if data.data|length == 0 and not error and not message %}
+    <div class="alert alert-info">
+        <h4 class="alert-heading">暂无数据</h4>
+        <p>系统中还没有商品数据，请先进行数据爬取。</p>
+        <hr>
+        <p class="mb-0">
+            <a href="/crawler" class="btn btn-primary">去爬取数据</a>
+        </p>
+    </div>
+    {% endif %}
+
+    <!-- 评论模态框 -->
+    <div class="modal fade" id="commentModal" tabindex="-1" aria-labelledby="commentModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="commentModalLabel">获取商品评论</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <h6>商品: <span id="commentProductTitle"></span></h6>
+                    
+                    <div id="crawlerSettings">
+                        <div class="mb-3">
+                            <label for="commentCount" class="form-label">评论数量</label>
+                            <select class="form-select" id="commentCount">
+                                <option value="10">10条</option>
+                                <option value="20">20条</option>
+                                <option value="50" selected>50条</option>
+                                <option value="100">100条</option>
+                                <option value="200">200条</option>
+                                <option value="300">300条</option>
+                                <option value="500">500条</option>
+                                <option value="1000">1000条</option>
+                            </select>
+                            <small class="form-text text-muted">建议设置在100以内，数量过多可能导致爬取时间过长</small>
+                        </div>
+                    </div>
+                    
+                    <div id="crawlerStatus" class="alert alert-info d-none">
+                        <span id="statusMessage">评论爬取状态将在这里显示</span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                    <button type="button" class="btn btn-primary" id="startCrawler">开始爬取</button>
+                    <button type="button" class="btn btn-danger" id="stopCrawler">停止爬取</button>
+                    <button type="button" class="btn btn-warning" id="confirmLogin">我已完成登录</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../static/vendors/perfect-scrollbar/perfect-scrollbar.min.js"></script>
+    <script src="../static/js/bootstrap.bundle.min.js"></script>
+
+    <script src="../static/vendors/simple-datatables/simple-datatables.js"></script>
+    <script>
+        // Simple Datatable
+        let table1 = document.querySelector('#table1');
+        let dataTable = new simpleDatatables.DataTable(table1);
+        let table2 = document.querySelector('#table2');
+        let dataTable2 = new simpleDatatables.DataTable(table2);
+        
+        // 全局变量，用于存储当前操作的商品信息
+        let currentProductId = null;
+        let currentProductUrl = null;
+        let currentProductTitle = null;
+        
+        // 添加调试函数
+        function logCurrentProduct(source) {
+            console.log(`[${source}] 当前商品信息:`, {
+                id: currentProductId, 
+                url: currentProductUrl, 
+                title: currentProductTitle
+            });
+        }
+        
+        // 获取评论按钮点击事件处理函数（提取为单独函数以便复用）
+        function handleGetCommentsClick(button) {
+            const id = button.getAttribute('data-id');
+            const title = button.getAttribute('data-title');
+            const url = button.getAttribute('data-url');
+            
+            // 检查是否缺少必要数据
+            if (!id || !url) {
+                console.error(`缺少必要数据: id=${id}, url=${url}, title=${title}`);
+                alert('缺少商品ID或URL，无法获取评论');
+                return;
+            }
+            
+            // 打开评论获取模态框
+            $('#commentModal').modal('show');
+            $('#commentProductTitle').text(title || `商品 #${id}`);
+            
+            // 重置模态框状态
+            $('#crawlerSettings').removeClass('d-none');
+            $('#crawlerStatus').addClass('d-none');
+            $('#statusMessage').text('评论爬取状态将在这里显示');
+            
+            // 设置按钮初始状态
+            $('#startCrawler').prop('disabled', false);
+            $('#stopCrawler').prop('disabled', false);
+            $('#confirmLogin').prop('disabled', true);
+            
+            // 存储当前商品信息
+            currentProductId = id;
+            currentProductUrl = url;
+            currentProductTitle = title;
+            
+            // 记录当前商品信息（调试用）
+            logCurrentProduct('handleGetCommentsClick');
+            
+            // 在模态框中保存商品信息，防止全局变量被覆盖
+            $('#commentModal').data('product_id', id);
+            $('#commentModal').data('product_url', url);
+            $('#commentModal').data('product_title', title);
+        }
+        
+        // 在表格操作发生后（如排序、过滤）重新绑定按钮事件
+        function rebindTableButtonEvents() {
+            // 详情按钮
+            document.querySelectorAll('.view-details').forEach(function(button) {
+                button.addEventListener('click', function() {
+                    const url = this.getAttribute('data-url');
+                    if (url) {
+                        window.open(url, '_blank');
+                    } else {
+                        alert('商品链接不可用');
+                    }
+                });
+            });
+            
+            // 店铺按钮
+            document.querySelectorAll('.view-shop').forEach(function(button) {
+                button.addEventListener('click', function() {
+                    const url = this.getAttribute('data-url');
+                    if (url) {
+                        window.open(url, '_blank');
+                    } else {
+                        alert('店铺链接不可用');
+                    }
+                });
+            });
+            
+            // 查看评论按钮
+            document.querySelectorAll('.view-comments').forEach(function(button) {
+                button.addEventListener('click', function() {
+                    const id = this.getAttribute('data-id');
+                    window.open(`/product_comments/${id}`, '_blank');
+                });
+            });
+            
+            // 获取评论按钮
+            document.querySelectorAll('.get-comments').forEach(function(button) {
+                button.addEventListener('click', function() {
+                    // 调用统一的处理函数
+                    handleGetCommentsClick(this);
+                });
+            });
+            
+            // 删除评论按钮
+            document.querySelectorAll('.delete-comments').forEach(function(button) {
+                button.addEventListener('click', function() {
+                    const id = this.getAttribute('data-id');
+                    const title = this.getAttribute('data-title');
+                    
+                    // 确认是否删除
+                    if (confirm(`确定要删除商品"${title}"的所有评论吗？此操作不可恢复！`)) {
+                        // 显示加载中提示
+                        const loadingToast = document.createElement('div');
+                        loadingToast.className = 'toast-container position-fixed top-0 end-0 p-3';
+                        loadingToast.innerHTML = `
+                            <div class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+                                <div class="toast-header">
+                                    <strong class="me-auto">删除中</strong>
+                                    <small>请稍候</small>
+                                </div>
+                                <div class="toast-body">
+                                    正在删除评论，请稍候...
+                                </div>
+                            </div>
+                        `;
+                        document.body.appendChild(loadingToast);
+                        
+                        // 使用Fetch API替代jQuery AJAX
+                        fetch(`/api/comments/delete/${id}`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({})
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            // 移除加载提示
+                            document.body.removeChild(loadingToast);
+                            
+                            if (data.success) {
+                                // 找到当前行中的评论数显示单元格并更新
+                                const row = button.closest('tr');
+                                const commentCell = row.querySelector('td:nth-child(7)'); // 第7列是评论数
+                                if (commentCell) {
+                                    // 确保将评论数显示为0
+                                    commentCell.textContent = data.current_comment_count || '0';
+                                    
+                                    // 如果评论数为0，隐藏删除评论按钮
+                                    if (data.current_comment_count === 0) {
+                                        console.log("评论数为0，隐藏删除按钮");
+                                        button.style.display = 'none';
+                                    }
+                                } else {
+                                    console.error("无法找到评论数单元格");
+                                }
+                                
+                                // 显示成功消息
+                                const successToast = document.createElement('div');
+                                successToast.className = 'toast-container position-fixed top-0 end-0 p-3';
+                                successToast.innerHTML = `
+                                    <div class="toast show bg-success text-white" role="alert" aria-live="assertive" aria-atomic="true">
+                                        <div class="toast-header bg-success text-white">
+                                            <strong class="me-auto">成功</strong>
+                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+                                        </div>
+                                        <div class="toast-body">
+                                            已成功删除${data.deleted_count}条评论，评论数已更新为${data.current_comment_count || 0}
+                                        </div>
+                                    </div>
+                                `;
+                                document.body.appendChild(successToast);
+                                
+                                // 3秒后自动关闭提示
+                                setTimeout(() => {
+                                    document.body.removeChild(successToast);
+                                }, 3000);
+                            } else {
+                                alert(`删除评论失败: ${data.message}`);
+                            }
+                        })
+                        .catch(error => {
+                            // 移除加载提示
+                            document.body.removeChild(loadingToast);
+                            
+                            console.error('删除评论出错:', error);
+                            alert(`删除评论出错: ${error.message || '未知错误'}`);
+                        });
+                    }
+                });
+            });
+        }
+        
+        // 初始绑定事件
+        document.addEventListener('DOMContentLoaded', function() {
+            rebindTableButtonEvents();
+            
+            // 监听数据表格事件，在表格更新后重新绑定按钮事件
+            if (dataTable) {
+                dataTable.on('datatable.sort', rebindTableButtonEvents);
+                dataTable.on('datatable.page', rebindTableButtonEvents);
+                dataTable.on('datatable.search', rebindTableButtonEvents);
+            }
+            
+            if (dataTable2) {
+                dataTable2.on('datatable.sort', rebindTableButtonEvents);
+                dataTable2.on('datatable.page', rebindTableButtonEvents);
+                dataTable2.on('datatable.search', rebindTableButtonEvents);
+            }
+        });
+        
+        function start() {
+            document.getElementById('tb1').hidden = ''
+        }
+        
+        // 处理详情按钮点击事件
+        document.addEventListener('DOMContentLoaded', function() {
+            // 详情按钮点击事件
+            document.querySelectorAll('.view-details').forEach(function(button) {
+                button.addEventListener('click', function() {
+                    const url = this.getAttribute('data-url');
+                    if (url) {
+                        window.open(url, '_blank');
+                    } else {
+                        alert('商品链接不可用');
+                    }
+                });
+            });
+            
+            // 店铺按钮点击事件
+            document.querySelectorAll('.view-shop').forEach(function(button) {
+                button.addEventListener('click', function() {
+                    const url = this.getAttribute('data-url');
+                    if (url) {
+                        window.open(url, '_blank');
+                    } else {
+                        alert('店铺链接不可用');
+                    }
+                });
+            });
+            
+            // 查看评论按钮点击事件
+            document.querySelectorAll('.view-comments').forEach(function(button) {
+                button.addEventListener('click', function() {
+                    const id = this.getAttribute('data-id');
+                    const title = this.getAttribute('data-title');
+                    
+                    // 跳转到商品评论页面
+                    window.open(`/product_comments/${id}`, '_blank');
+                });
+            });
+            
+            // 获取评论按钮点击事件
+            document.querySelectorAll('.get-comments').forEach(function(button) {
+                button.addEventListener('click', function() {
+                    const id = this.getAttribute('data-id');
+                    const title = this.getAttribute('data-title');
+                    const url = this.getAttribute('data-url');
+                    
+                    // 打开评论获取模态框
+                    $('#commentModal').modal('show');
+                    $('#commentProductTitle').text(title);
+                    
+                    // 重置模态框状态
+                    $('#crawlerSettings').removeClass('d-none');
+                    $('#crawlerStatus').addClass('d-none');
+                    $('#statusMessage').text('评论爬取状态将在这里显示');
+                    
+                    // 设置按钮初始状态
+                    $('#startCrawler').prop('disabled', false);
+                    $('#stopCrawler').prop('disabled', false);
+                    $('#confirmLogin').prop('disabled', true);
+                    
+                    // 存储当前商品信息
+                    currentProductId = id;
+                    currentProductUrl = url;
+                    currentProductTitle = title;
+                });
+            });
+            
+            // 开始爬取按钮点击事件
+            $('#startCrawler').on('click', function() {
+                // 禁用按钮
+                $(this).prop('disabled', true);
+                $('#statusMessage').text('正在启动评论爬取...');
+                
+                // 获取输入参数
+                const commentCount = $('#commentCount').val();
+                
+                // 从模态框中获取商品信息，如果没有则使用全局变量（兼容旧代码）
+                const productId = $('#commentModal').data('product_id') || currentProductId;
+                const productUrl = $('#commentModal').data('product_url') || currentProductUrl;
+                const productTitle = $('#commentModal').data('product_title') || currentProductTitle;
+                
+                // 确保我们有必要的数据
+                if (!productId || !productUrl) {
+                    $('#statusMessage').html(`
+                        <div class="alert alert-danger">
+                            <strong>错误</strong>: 缺少商品ID或URL。<br>
+                            <small>请尝试关闭对话框并重新点击"获取评论"按钮</small>
+                        </div>
+                    `);
+                    $(this).prop('disabled', false);
+                    return;
+                }
+                
+                // 更新全局变量，确保一致性
+                currentProductId = productId;
+                currentProductUrl = productUrl;
+                currentProductTitle = productTitle;
+                
+                // 记录发送的参数（调试用）
+                console.log("[startCrawler] 发送AJAX请求，参数：", {
+                    product_id: productId, 
+                    product_url: productUrl,
+                    comment_count: commentCount
+                });
+                
+                // 显示状态区域
+                $('#crawlerStatus').removeClass('d-none');
+                
+                // 发送AJAX请求启动爬取
+                $.ajax({
+                    url: '/api/comments/start',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    dataType: 'json',
+                    data: JSON.stringify({
+                        product_id: productId,
+                        product_url: productUrl,
+                        comment_count: commentCount
+                    }),
+                    success: function(response) {
+                        console.log("[startCrawler] 开始爬取响应:", response);
+                        
+                        if (response.success) {
+                            // 更新UI状态
+                            if (response.status === 'waiting_login') {
+                                // 等待登录
+                                $('#statusMessage').html(`
+                                    <div class="alert alert-warning">
+                                        <strong>需要登录</strong><br>
+                                        请在打开的浏览器窗口中登录淘宝账号，然后点击"我已完成登录"按钮<br>
+                                        <small>系统需要您的账号登录信息来访问评论数据</small>
+                                    </div>
+                                `);
+                                $('#confirmLogin').prop('disabled', false);
+                                startStatusPolling(); // 开始轮询状态
+                            } else {
+                                // 直接开始爬取
+                                $('#statusMessage').html(`
+                                    <div class="alert alert-success">
+                                        <strong>评论爬取已开始</strong><br>
+                                        商品: ${productTitle || `#${productId}`}<br>
+                                        目标评论数: ${commentCount}<br>
+                                        <small>系统正在获取数据，请稍候...</small>
+                                    </div>
+                                `);
+                                $('#confirmLogin').prop('disabled', true);
+                                startStatusPolling(); // 开始轮询状态
+                            }
+                            
+                            // 禁用开始按钮，启用停止按钮
+                            $('#startCrawler').prop('disabled', true);
+                            $('#stopCrawler').prop('disabled', false);
+                        } else {
+                            // 爬取启动失败
+                            $('#statusMessage').html(`
+                                <div class="alert alert-danger">
+                                    <strong>启动失败</strong><br>
+                                    ${response.message}<br>
+                                    <small>请检查商品链接是否有效，或稍后再试</small>
+                                </div>
+                            `);
+                            $('#startCrawler').prop('disabled', false);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error("爬取请求错误:", {xhr: xhr, status: status, error: error});
+                        
+                        // 尝试解析响应JSON
+                        let errorDetails = '';
+                        try {
+                            if (xhr.responseText) {
+                                const errorResponse = JSON.parse(xhr.responseText);
+                                errorDetails = `<br>详细信息: ${errorResponse.message || '未知错误'}`;
+                            }
+                        } catch (e) {
+                            errorDetails = `<br>无法解析错误详情: ${xhr.responseText || '无响应'}`; 
+                        }
+                        
+                        $('#statusMessage').html(`请求错误: ${error} (${xhr.status})<br>请确保服务器正在运行，且API路由正确注册${errorDetails}`);
+                        $('#startCrawler').prop('disabled', false);
+                        $('#confirmLogin').prop('disabled', true);
+                    }
+                });
+            });
+            
+            // 确认登录按钮点击事件
+            $('#confirmLogin').on('click', function() {
+                // 禁用确认按钮
+                $(this).prop('disabled', true);
+                $('#statusMessage').html(`
+                    <div class="alert alert-info">
+                        <strong>正在确认登录状态...</strong><br>
+                        <small>系统将尝试继续爬取流程，请稍候...</small>
+                    </div>
+                `);
+                
+                // 发送AJAX请求确认登录
+                $.ajax({
+                    url: '/api/comments/confirm-login',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    dataType: 'json',
+                    data: JSON.stringify({}),
+                    success: function(response) {
+                        console.log("登录确认响应:", response);
+                        // 无论响应成功与否，都继续爬取流程
+                        $('#statusMessage').html(`
+                            <div class="alert alert-success mb-2">
+                                <strong>已确认登录</strong><br>
+                                系统正在执行以下操作：<br>
+                                1. 识别评论区位置<br>
+                                2. 点击"全部评价"按钮展开完整评论<br>
+                                3. 开始爬取评论数据<br>
+                                <small>请稍等片刻，正在处理中...</small>
+                            </div>
+                        `);
+                        
+                        // 启动状态轮询
+                        startStatusPolling();
+                    },
+                    error: function(xhr, status, error) {
+                        console.error("登录确认请求错误:", {xhr: xhr, status: status, error: error});
+                        
+                        // 尝试解析响应
+                        let errorMsg = '';
+                        try {
+                            if (xhr.responseText) {
+                                const errorResponse = JSON.parse(xhr.responseText);
+                                errorMsg = errorResponse.message || error;
+                            } else {
+                                errorMsg = error;
+                            }
+                        } catch (e) {
+                            errorMsg = `${error} (无法解析详细错误)`;
+                        }
+                        
+                        // 即使出错，也尝试继续爬取流程
+                        $('#statusMessage').html(`
+                            <div class="alert alert-warning">
+                                <strong>请求处理出错</strong><br>
+                                但系统仍将尝试继续爬取评论<br>
+                                <small>错误信息: ${errorMsg}</small>
+                            </div>
+                        `);
+                        
+                        // 延迟一秒后开始轮询状态
+                        setTimeout(function() {
+                            startStatusPolling();
+                        }, 1000);
+                    }
+                });
+            });
+            
+            // 停止爬取按钮点击事件
+            $('#stopCrawler').on('click', function() {
+                // 禁用停止按钮
+                // $(this).prop('disabled', true); // 移除此行，使按钮始终可点击
+                $('#statusMessage').text('正在停止评论爬取...');
+                
+                // 停止状态轮询
+                if (statusInterval) {
+                    clearInterval(statusInterval);
+                    statusInterval = null;
+                }
+                
+                // 发送AJAX请求停止爬取
+                $.ajax({
+                    url: '/api/comments/stop',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    dataType: 'json',
+                    data: JSON.stringify({}),
+                    success: function(response) {
+                        if (response.success) {
+                            // 停止成功
+                            $('#statusMessage').text('评论爬取已停止: ' + response.message);
+                            $('#startCrawler').prop('disabled', false);
+                            // $('#stopCrawler').prop('disabled', true); // 移除此行，让停止按钮始终保持可点击状态
+                            $('#confirmLogin').prop('disabled', true);
+                        } else {
+                            // 停止失败
+                            $('#statusMessage').text('停止失败: ' + response.message);
+                            // 不再启用停止按钮，因为它始终是启用状态
+                            // $('#stopCrawler').prop('disabled', false); // 移除此行
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        $('#statusMessage').text('请求错误: ' + error);
+                        // 不再启用停止按钮，因为它始终是启用状态
+                        // $('#stopCrawler').prop('disabled', false); // 移除此行
+                    }
+                });
+            });
+            
+            // 状态轮询函数
+            let statusInterval = null;
+            let currentProductId = null;
+            let currentProductUrl = null;
+            let currentProductTitle = null;
+            let statusRetryCount = 0;
+            let maxStatusRetry = 5;
+            
+            function startStatusPolling() {
+                if (statusInterval) {
+                    clearInterval(statusInterval);
+                }
+                
+                // 重置重试计数
+                statusRetryCount = 0;
+                
+                // 立即执行一次
+                updateStatus();
+                
+                // 设置定时器，每3秒更新一次状态
+                statusInterval = setInterval(updateStatus, 3000);
+            }
+            
+            function updateStatus() {
+                $.ajax({
+                    url: '/api/comments/status',
+                    type: 'GET',
+                    dataType: 'json',
+                    timeout: 5000, // 设置超时时间
+                    success: function(response) {
+                        console.log("[updateStatus] 状态查询响应:", response);
+                        
+                        // 重置重试计数
+                        statusRetryCount = 0;
+                        
+                        // 从模态框中获取商品信息
+                        const productId = $('#commentModal').data('product_id') || currentProductId;
+                        const productTitle = $('#commentModal').data('product_title') || currentProductTitle;
+                        
+                        if (response.success) {
+                            const status = response.status;
+                            
+                            if (status.is_running) {
+                                // 爬虫正在运行
+                                if (status.is_waiting_login) {
+                                    // 等待登录
+                                    $('#statusMessage').html(`
+                                        <div class="alert alert-warning">
+                                            <strong>需要登录</strong><br>
+                                            请在打开的浏览器窗口中登录淘宝账号，然后点击"我已完成登录"按钮<br>
+                                            <small>系统需要您的账号登录信息来访问评论数据</small>
+                                        </div>
+                                    `);
+                                    $('#confirmLogin').prop('disabled', false);
+                                } else {
+                                    // 正在爬取
+                                    let progressPercentage = 0;
+                                    if (status.max_count > 0) {
+                                        progressPercentage = Math.round((status.current_count / status.max_count) * 100);
+                                    }
+                                    
+                                    $('#statusMessage').html(`
+                                        <div>
+                                            <strong>正在爬取评论</strong><br>
+                                            已获取: ${status.current_count}/${status.max_count} 条评论
+                                            <div class="progress mt-2">
+                                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                                     role="progressbar" 
+                                                     style="width: ${progressPercentage}%" 
+                                                     aria-valuenow="${progressPercentage}" 
+                                                     aria-valuemin="0" 
+                                                     aria-valuemax="100">
+                                                    ${progressPercentage}%
+                                                </div>
+                                            </div>
+                                            <small class="text-muted">爬取过程需要一定时间，请耐心等待...</small>
+                                        </div>
+                                    `);
+                                    $('#confirmLogin').prop('disabled', true);
+                                }
+                                // 确保停止按钮始终可点击
+                                $('#stopCrawler').prop('disabled', false);
+                            } else {
+                                // 爬虫已停止
+                                if (status.current_count > 0) {
+                                    $('#statusMessage').html(`
+                                        <div class="alert alert-success">
+                                            <strong>评论爬取完成</strong><br>
+                                            商品: ${productTitle || `#${productId}`}<br>
+                                            共获取到 <strong>${status.current_count}</strong> 条评论数据<br>
+                                            <a href="/product_comments/${productId}" target="_blank" class="btn btn-sm btn-info mt-2">
+                                                <i class="bi bi-eye"></i> 查看评论
+                                            </a>
+                                            <button type="button" class="btn btn-sm btn-success mt-2" onclick="location.reload()">
+                                                <i class="bi bi-arrow-clockwise"></i> 刷新页面
+                                            </button>
+                                        </div>
+                                    `);
+                                    
+                                    // 延迟3秒后自动刷新页面
+                                    setTimeout(function() {
+                                        location.reload();
+                                    }, 3000);
+                                } else {
+                                    // 修改这里，检查是否已经爬取过评论
+                                    $.ajax({
+                                        url: `/api/check_comments/${productId}`,
+                                        type: 'GET',
+                                        success: function(response) {
+                                            if (response.comment_fetched > 0) {
+                                                $('#statusMessage').html(`
+                                                    <div class="alert alert-success">
+                                                        <strong>评论爬取完成</strong><br>
+                                                        商品: ${productTitle || `#${productId}`}<br>
+                                                        共获取到 <strong>${response.comment_fetched}</strong> 条评论数据<br>
+                                                        <a href="/product_comments/${productId}" target="_blank" class="btn btn-sm btn-info mt-2">
+                                                            <i class="bi bi-eye"></i> 查看评论
+                                                        </a>
+                                                        <button type="button" class="btn btn-sm btn-success mt-2" onclick="location.reload()">
+                                                            <i class="bi bi-arrow-clockwise"></i> 刷新页面
+                                                        </button>
+                                                    </div>
+                                                `);
+                                                
+                                                // 延迟3秒后自动刷新页面
+                                                setTimeout(function() {
+                                                    location.reload();
+                                                }, 3000);
+                                            } else {
+                                                $('#statusMessage').html(`
+                                                    <div class="alert alert-info">
+                                                        <strong>评论爬取已完成</strong><br>
+                                                        商品: ${productTitle || `#${productId}`}<br>
+                                                        <br>
+                                                        <small></small>
+                                                    </div>
+                                                `);
+                                            }
+                                        },
+                                        error: function() {
+                                            $('#statusMessage').html(`
+                                                <div class="alert alert-info">
+                                                    <strong>评论爬取已完成</strong><br>
+                                                    商品: ${productTitle || `#${productId}`}<br>
+                                                    <br>
+                                                    <small></small>
+                                                </div>
+                                            `);
+                                        }
+                                    });
+                                }
+                                
+                                // 启用开始按钮, 但不禁用停止按钮
+                                $('#startCrawler').prop('disabled', false);
+                                // $('#stopCrawler').prop('disabled', true); // 移除此行，让停止按钮始终保持可点击状态
+                                $('#confirmLogin').prop('disabled', true);
+                                
+                                // 停止状态轮询
+                                if (statusInterval) {
+                                    clearInterval(statusInterval);
+                                    statusInterval = null;
+                                }
+                            }
+                        } else {
+                            // 获取状态失败
+                            statusRetryCount++;
+                            
+                            if (statusRetryCount >= maxStatusRetry) {
+                                // 多次重试失败，停止轮询
+                                $('#statusMessage').html(`
+                                    <div class="alert alert-danger">
+                                        <strong>状态查询失败</strong><br>
+                                        ${response.message || '无法获取爬虫状态'}<br>
+                                        <small>请检查浏览器和网络连接</small>
+                                    </div>
+                                `);
+                                
+                                // 停止状态轮询
+                                if (statusInterval) {
+                                    clearInterval(statusInterval);
+                                    statusInterval = null;
+                                }
+                                
+                                // 启用开始按钮
+                                $('#startCrawler').prop('disabled', false);
+                                // 不禁用停止按钮
+                                // $('#stopCrawler').prop('disabled', true); // 让停止按钮始终可点击
+                            }
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error("状态查询错误:", {xhr: xhr, status: status, error: error});
+                        statusRetryCount++;
+                        
+                        if (statusRetryCount >= maxStatusRetry) {
+                            // 多次重试失败，停止轮询
+                            $('#statusMessage').html(`
+                                <div class="alert alert-danger">
+                                    <strong>状态查询失败</strong><br>
+                                    连接错误: ${error}<br>
+                                    <small>请检查浏览器和网络连接</small>
+                                </div>
+                            `);
+                            
+                            // 停止状态轮询
+                            if (statusInterval) {
+                                clearInterval(statusInterval);
+                                statusInterval = null;
+                            }
+                            
+                            // 启用开始按钮
+                            $('#startCrawler').prop('disabled', false);
+                            // 不禁用停止按钮
+                            // $('#stopCrawler').prop('disabled', true); // 让停止按钮始终可点击
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+
+{% endblock %}

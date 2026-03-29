@@ -1,0 +1,201 @@
+{% extends 'base.html' %}
+{% block page %}
+    <div class="page-title">
+        <div class="row">
+            <div class="col-12 col-md-6 order-md-1 order-last">
+                <h3>销量排行TOP10分析</h3>
+                <p class="text-subtitle text-muted">淘宝商品销量排行榜分析</p>
+            </div>
+            <div class="col-12 col-md-6 order-md-2 order-first">
+                <nav aria-label="breadcrumb" class="breadcrumb-header">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="/index">首页</a></li>
+                        <li class="breadcrumb-item"><a href="/visualization">数据可视化</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">销量排行</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <section class="section">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title">销量排行TOP10</h4>
+                    </div>
+                    <div class="card-body">
+                        <div id="salesChart" style="height: 500px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title">销量占比分析</h4>
+                    </div>
+                    <div class="card-body">
+                        <div id="salesPieChart" style="height: 350px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 确保引入ECharts库 -->
+    <script src="../static/vendors/echarts/echarts.min.js"></script>
+
+    <script>
+        // 页面加载完成后执行
+        document.addEventListener('DOMContentLoaded', function() {
+            // 初始化图表
+            var salesChart = echarts.init(document.getElementById('salesChart'));
+            var salesPieChart = echarts.init(document.getElementById('salesPieChart'));
+            
+            // 先显示加载中
+            salesChart.showLoading();
+            salesPieChart.showLoading();
+            
+            // 从API获取数据
+            fetch('/api/visualization_data?type=sales')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('网络响应不正常');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // 隐藏加载
+                    salesChart.hideLoading();
+                    salesPieChart.hideLoading();
+                    
+                    // 配置销量排行图表
+                    var salesOption = {
+                        title: {
+                            text: '销量排行TOP10'
+                        },
+                        tooltip: {
+                            trigger: 'axis',
+                            axisPointer: {
+                                type: 'shadow'
+                            },
+                            formatter: function(params) {
+                                return `${params[0].name}<br>${params[0].marker}销量: ${params[0].value}`;
+                            }
+                        },
+                        grid: {
+                            left: '3%',
+                            right: '4%',
+                            bottom: '3%',
+                            containLabel: true
+                        },
+                        xAxis: {
+                            type: 'value',
+                            name: '销量'
+                        },
+                        yAxis: {
+                            type: 'category',
+                            data: data.top_sales_titles,
+                            name: '商品名称',
+                            axisLabel: {
+                                width: 200,
+                                overflow: 'truncate',
+                                interval: 0,
+                                rotate: 0
+                            }
+                        },
+                        series: [{
+                            name: '销量',
+                            type: 'bar',
+                            data: data.top_sales_values,
+                            itemStyle: {
+                                color: function(params) {
+                                    // 不同商品使用不同的颜色
+                                    var colorList = [
+                                        '#e74a3b', '#1cc88a', '#4e73df', 
+                                        '#36b9cc', '#f6c23e', '#fd7e14',
+                                        '#6f42c1', '#20c9a6', '#5a5c69', '#858796'
+                                    ];
+                                    return colorList[params.dataIndex % colorList.length];
+                                }
+                            },
+                            label: {
+                                show: true,
+                                position: 'right',
+                                formatter: '{c}'
+                            }
+                        }]
+                    };
+                    
+                    // 使用配置项设置图表
+                    salesChart.setOption(salesOption);
+                    
+                    // 计算总销量
+                    const totalSales = data.top_sales_values.reduce((a, b) => a + b, 0);
+                    
+                    // 创建销量占比饼图
+                    var salesPieOption = {
+                        title: {
+                            text: '热销商品销量占比'
+                        },
+                        tooltip: {
+                            trigger: 'item',
+                            formatter: '{a} <br/>{b}: {c} ({d}%)'
+                        },
+                        legend: {
+                            orient: 'vertical',
+                            right: 'right',
+                            type: 'scroll'
+                        },
+                        series: [
+                            {
+                                name: '销量占比',
+                                type: 'pie',
+                                radius: '60%',
+                                center: ['40%', '50%'],
+                                avoidLabelOverlap: true,
+                                label: {
+                                    show: true,
+                                    formatter: '{b}: {c} ({d}%)'
+                                },
+                                emphasis: {
+                                    itemStyle: {
+                                        shadowBlur: 10,
+                                        shadowOffsetX: 0,
+                                        shadowColor: 'rgba(0, 0, 0, 0.5)'
+                                    }
+                                },
+                                data: data.top_sales_titles.map((title, index) => {
+                                    return {
+                                        name: title,
+                                        value: data.top_sales_values[index]
+                                    };
+                                })
+                            }
+                        ]
+                    };
+                    
+                    salesPieChart.setOption(salesPieOption);
+                    
+                    // 窗口大小改变时，重新调整图表大小
+                    window.addEventListener('resize', function() {
+                        salesChart.resize();
+                        salesPieChart.resize();
+                    });
+                })
+                .catch(error => {
+                    console.error('获取数据失败:', error);
+                    // 隐藏加载
+                    salesChart.hideLoading();
+                    salesPieChart.hideLoading();
+                    
+                    // 显示错误信息
+                    alert('获取数据失败: ' + error.message);
+                });
+        });
+    </script>
+{% endblock %} 

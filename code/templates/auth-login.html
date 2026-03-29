@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>基于Python的商品评论数据采集与分析系统</title>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../static/css/bootstrap.css">
+    <link rel="stylesheet" href="../static/vendors/bootstrap-icons/bootstrap-icons.css">
+    <link rel="stylesheet" href="../static/css/app.css">
+    <link rel="stylesheet" href="../static/css/pages/auth.css">
+</head>
+
+<body>
+<div id="auth">
+
+    <div class="row h-100">
+        <div class="col-lg-5 col-12">
+            <div id="auth-left">
+                <div class="auth-logo">
+                    <a href="#"><img src="../static/images/logo/logo.png" alt="Logo"></a>
+                </div>
+                <h1 class="auth-title">登录</h1>
+                <p class="auth-subtitle mb-5">使用您的账户进行登录</p>
+
+                <!-- 在登录表单前添加错误信息显示区域 -->
+                {% if error %}
+                <div class="alert alert-danger">
+                    {{ error }}
+                </div>
+                {% endif %}
+
+                <!-- 注册成功消息显示区域 -->
+                {% if request.args.get('message') %}
+                <div class="alert alert-success">
+                    {{ request.args.get('message') }}
+                </div>
+                {% endif %}
+
+                <form action="/login" method="post" enctype="application/x-www-form-urlencoded">
+                    <div class="form-group position-relative has-icon-left mb-4">
+                        <input type="text" class="form-control form-control-xl" placeholder="用户名" name="username" required>
+                        <div class="form-control-icon">
+                            <i class="bi bi-person"></i>
+                        </div>
+                    </div>
+                    <div class="form-group position-relative has-icon-left mb-4">
+                        <input type="password" class="form-control form-control-xl" placeholder="密码" name="password" required>
+                        <div class="form-control-icon">
+                            <i class="bi bi-shield-lock"></i>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-block btn-lg shadow-lg mt-5">登录</button>
+                </form>
+                <div class="text-center mt-5 text-lg fs-4">
+                    <p class="text-gray-600">还没有登录账号? <a href="register"
+                                                                class="font-bold">注册</a>.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-7 d-none d-lg-block">
+            <div id="auth-right">
+
+            </div>
+        </div>
+    </div>
+
+</div>
+</body>
+<script src="https://cdn.bootcss.com/jquery/3.2.0/jquery.js"></script>
+</html>
